@@ -109,15 +109,21 @@ samelength([_|L1], [_|L2]) :-
 %----------------------------------------------------%
 
 % Start sloving the puzzle
-%solve_puzzle(Puzzle_Blank, WordList, Puzzle_Filled):-
+solve_puzzle(Solution, [], Solution):- !.
+solve_puzzle(Puzzle_Blank, WordList, Puzzle_Filled):-
+	optimize_wordlist(WordList,WordList_Optimized),
+	hor_slots_puzzle(Puzzle_Blank,H_Slots,H_Puzzle_Filled_Variable),
+	transpose(H_Puzzle_Filled_Variable, V_Puzzle),
+    ver_slots_puzzle(V_Puzzle,H_Slots,H_V_Slots),
+	transpose(V_Puzzle,Puzzle_Fixed),!,
+	match_words(WordList_Optimized,H_V_Slots),
+	solve_puzzle(Puzzle_Fixed, [], Puzzle_Filled),!.
 
-	%Resort the wordlist, making 
-%	process_wordlist(WordList,WordList_New).
+%------------------------------------------------------------------%
+%--------------- Rules used for optimize the list -----------------%
+%------------------------------------------------------------------%
 
-
-optimize_wordlist(WordlistFile,WordList_Optimized):-
-
-	read_file(WordlistFile, Wordlist_Original),
+optimize_wordlist(Wordlist_Original,WordList_Optimized):-
 	
 	% sort the wordlist based on each word length, descending order
 	quick_sort_descend(Wordlist_Original, WordList_Descent_Order),
@@ -130,10 +136,6 @@ optimize_wordlist(WordlistFile,WordList_Optimized):-
 
 	% remove the outer nesting, change to norma format of WordList
 	remove_nesting(WordList_Ascend_Order,WordList_Optimized).
-
-%------------------------------------------------------------------%
-%--------------- Rules used for optimize the list -----------------%
-%------------------------------------------------------------------%
 
 % For a sorted list, get the first several elements whose value are same
 % First_Element: the first ele of a list
@@ -174,7 +176,7 @@ remove_First_N_Elements([_|Tail],N,Result):-
 % remove the outer nesting
 % Eg. [[[a],[b]],[[c],[d]]] -> [[a],[b],[c],[d]]
 remove_nesting(List,Result):-r_n(List,[],Result).
-r_n([],Acc,Acc).
+r_n([],Acc,Acc):-!.
 r_n([X|Xs],Acc,Result):-
 	append(Acc,X,Acc1),
 	r_n(Xs,Acc1,Result).
@@ -227,3 +229,97 @@ pivoting_a(H,[X|T],L,[X|G]):-
 	X_length<H_length,
 	pivoting_a(H,T,L,G).
 %%
+
+%------------------------------------------------------------------%
+%----------------- Mark puzzle row with variable ------------------%
+%------------------------------------------------------------------%
+
+%Eg. ['_','_',#,#,'_','_'] -> [_G15092255, _G15092258, #, #, _G15092285, _G15092300]
+mark_row(Row,Row_Marked):-m_r(Row,[],Row_Marked).
+m_r([],Acc,Acc).
+m_r([Char|Chars],Acc,Row_Marked):-
+	Char='_'-> 
+	length(Variable,1),
+	append(Acc,Variable,Acc1),
+	m_r(Chars,Acc1,Row_Marked)
+	;
+	append(Acc,[Char],Acc1),
+	m_r(Chars,Acc1,Row_Marked).
+%%
+
+%------------------------------------------------------------------%
+%----------------- Form slots from a marked row- ------------------%
+%------------------------------------------------------------------%
+
+%Eg. [_G15092255, _G15092258, #, #, _G15092285, _G15092300] -> [[_G15092255, _G15092258],[_G15092285, _G15092300]]
+form_slots(Marked_Row,Slots):- f_s(Marked_Row,[],[],Slots).
+f_s([],[],Acc,Acc):-!. % when meet this rule, cut it, in case of run to the next clause
+
+f_s([],Slot_temp,Acc,Slots):- % deal with the case that no # at the end of row
+	length(Slot_temp,L),
+	L>=1 ->
+		append(Acc,[Slot_temp],Acc1),
+		f_s([],[],Acc1,Slots)
+		;
+		f_s([],[],Acc,Slots).
+
+f_s([Char|Chars],Slot_temp,Acc,Slots):-
+	Char == # ->
+		length(Slot_temp,L),
+		(L>=1->                          % deal with the case that no variable before the #
+			append(Acc,[Slot_temp],Acc1),
+			f_s(Chars,[],Acc1,Slots)
+			;
+			f_s(Chars,[],Acc,Slots)
+		)
+	;
+	append(Slot_temp,[Char],Slot_temp1),
+	f_s(Chars,Slot_temp1,Acc,Slots).
+
+%------------------------------------------------------------------%
+%----- Get the slots and updated horizational puzzle --------------%
+%------------------------------------------------------------------%
+
+hor_slots_puzzle(Puzzle,Slots,Puzzle_With_Variable):-
+	h_s_p(Puzzle,[],Slots,[],Puzzle_With_Variable).
+h_s_p([],SlotsAcc,SlotsAcc,PuzzleAcc,PuzzleAcc).
+h_s_p([Row|Rows],SlotsAcc,Slots,PuzzleAcc,Puzzle_With_Variable):-
+	mark_row(Row,Row_Marked),
+	append(PuzzleAcc,[Row_Marked],PuzzleAcc_New),
+	form_slots(Row_Marked,Slots_From_Row),
+	append(SlotsAcc,Slots_From_Row,SlotAcc_New),
+	h_s_p(Rows,SlotAcc_New,Slots,PuzzleAcc_New,Puzzle_With_Variable).
+
+%------------------------------------------------------------------%
+%---------------- Get the slots in vertical puzzle ----------------%
+%------------------------------------------------------------------%
+ver_slots_puzzle([],SlotsAcc,SlotsAcc).
+ver_slots_puzzle([Row|Rows],SlotsAcc,H_V_Slots):-
+	form_slots(Row,Slots_From_Row),
+	append(SlotsAcc,Slots_From_Row,SlotAcc_New),
+	ver_slots_puzzle(Rows,SlotAcc_New,H_V_Slots).
+
+%------------------------------------------------------------------%
+%--------------------- Match one word to slot ---------------------%
+%------------------------------------------------------------------%
+match_one_word_to_slot(Word,[Slot|Slots],Result):-
+	m_w_t_s(Word,[Slot|Slots],[],Result).
+m_w_t_s(_,[],Acc,Acc).
+m_w_t_s(Word,[Slot|Slots],Acc,Result):-
+	(Word = Slot,
+	append(Acc,[Slot],Acc1),
+	append(Acc1,Slots,Acc2),
+	m_w_t_s(_,[],Acc2,Result))
+	;
+	(append(Acc,[Slot],Acc_New),
+	m_w_t_s(Word,Slots,Acc_New,Result)),
+	not(length(Slots,0)).
+
+
+%------------------------------------------------------------------%
+%--------------------- Match all words to slots -------------------%
+%------------------------------------------------------------------%
+match_words([],_):-!.
+match_words([Word|Words],H_V_Slots):-
+	match_one_word_to_slot(Word,H_V_Slots,Slots_Left),
+	match_words(Words,Slots_Left).

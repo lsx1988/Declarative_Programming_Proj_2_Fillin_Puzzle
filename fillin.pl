@@ -115,41 +115,49 @@ samelength([_|L1], [_|L2]) :-
 %	process_wordlist(WordList,WordList_New).
 
 
-process_wordlist(WordlistFile,WordList_New):-
+optimize_wordlist(WordlistFile,WordList_Optimized):-
 
-	read_file(WordlistFile, Wordlist),
+	read_file(WordlistFile, Wordlist_Original),
 	
-	% sort the wordlist based on each word length, decending order
-	quick_sort_decend(Wordlist, WordList_decent_order),
+	% sort the wordlist based on each word length, descending order
+	quick_sort_descend(Wordlist_Original, WordList_Descent_Order),
 
 	% categorise the word based on its length
-	categorise_list(WordList_decent_order,Wordlist_New).
+	categorise_list(WordList_Descent_Order,[],WordList_Categorise),
+
+	% sort the categorised worklist based on the length of each category length
+	quick_sort_ascend(WordList_Categorise,WordList_Ascend_Order),
+
+	% remove the outer nesting, change to norma format of WordList
+	remove_nesting(WordList_Ascend_Order,WordList_Optimized).
 
 %------------------------------------------------------------------%
-%------- Rules used for categorise the elements of a list ----------%
+%--------------- Rules used for optimize the list -----------------%
 %------------------------------------------------------------------%
 
 % For a sorted list, get the first several elements whose value are same
 % First_Element: the first ele of a list
 % Acc: Accumulator used to store the element
-% Eg. [5,5,3,3,1,1] -> [5,5]
+% Eg. [5,5,5,3,3,1,1] -> [5,5,5]
 extract_first_N_same_elements([First_Element|Tail],Acc,Result):-
 	   Acc = []
 	-> extract_first_N_same_elements(Tail,[First_Element],Result)
 	;
-	   member(First_Element,Acc),
-	   extract_first_N_same_elements(Tail,[First_Element|Acc],Result).
-extract_first_N_same_elements(_,Acc,Acc).
+	   maplist(same_length(First_Element),Acc),
+	   extract_first_N_same_elements(Tail,[First_Element|Acc],Result),!.
+extract_first_N_same_elements(_,Acc,Acc):-Acc \= [].
+%%
 
 % categorise the elements of sorted list, the same elements are binded in a list
 % Acc: Accumulator used to store the sublist
 % Eg. [5,5,5,3,3,6,6,1,1,1,1] -> [[1,1,1,1],[6,6],[3,3],[5,5,5]]
-categorise_list([],Acc,Acc):-!.
+categorise_list([],Acc,RevAcc):-reverse(Acc,RevAcc).
 categorise_list(List,Acc,Result):-
 	extract_first_N_same_elements(List,[],Temp),
 	length(Temp,N),
 	remove_First_N_Elements(List,N,Rest),
 	categorise_list(Rest,[Temp|Acc],Result).
+%%
 
 % Remove first N elements from list.
 % List: The list to move element from
@@ -161,28 +169,61 @@ remove_First_N_Elements(List,0,List).
 remove_First_N_Elements([_|Tail],N,Result):-
 	Temp is N-1,
 	remove_First_N_Elements(Tail,Temp,Result).
+%%
+
+% remove the outer nesting
+% Eg. [[[a],[b]],[[c],[d]]] -> [[a],[b],[c],[d]]
+remove_nesting(List,Result):-r_n(List,[],Result).
+r_n([],Acc,Acc).
+r_n([X|Xs],Acc,Result):-
+	append(Acc,X,Acc1),
+	r_n(Xs,Acc1,Result).
+%%
 
 %------------------------------------------------------------------%
 %------------------------ Quicksort -------------------------------%
 %-- http://kti.mff.cuni.cz/~bartak/prolog/sorting.html#quick-------%
 
-quick_sort_decend(List,Sorted):-
-	q_sort(List,[],Sorted).
-q_sort([],Acc,Acc).
-q_sort([H|T],Acc,Sorted):-
-	pivoting(H,T,L1,L2),
-	q_sort(L1,Acc,Sorted1),
-	q_sort(L2,[H|Sorted1],Sorted).
+% quicksort in decending order
+quick_sort_descend(List,Sorted):-
+	q_sort_d(List,[],Sorted).
+q_sort_d([],Acc,Acc).
+q_sort_d([H|T],Acc,Sorted):-
+	pivoting_d(H,T,L1,L2),
+	q_sort_d(L1,Acc,Sorted1),
+	q_sort_d(L2,[H|Sorted1],Sorted).
 
-pivoting(_,[],[],[]).
-pivoting(H,[X|T],[X|L],G):-
+pivoting_d(_,[],[],[]).
+pivoting_d(H,[X|T],[X|L],G):-
 	length(X,X_length),
 	length(H,H_length),
 	X_length=<H_length,
-	pivoting(H,T,L,G).
-pivoting(H,[X|T],L,[X|G]):-
+	pivoting_d(H,T,L,G).
+pivoting_d(H,[X|T],L,[X|G]):-
 	length(X,X_length),
 	length(H,H_length),
 	X_length>H_length,
-	pivoting(H,T,L,G).
+	pivoting_d(H,T,L,G).
+%%
 
+% quicksort in accending order
+quick_sort_ascend(List,Sorted):-
+	q_sort_a(List,[],Sorted).
+q_sort_a([],Acc,Acc).
+q_sort_a([H|T],Acc,Sorted):-
+	pivoting_a(H,T,L1,L2),
+	q_sort_a(L1,Acc,Sorted1),
+	q_sort_a(L2,[H|Sorted1],Sorted).
+
+pivoting_a(_,[],[],[]).
+pivoting_a(H,[X|T],[X|L],G):-
+	length(X,X_length),
+	length(H,H_length),
+	X_length>=H_length,
+	pivoting_a(H,T,L,G).
+pivoting_a(H,[X|T],L,[X|G]):-
+	length(X,X_length),
+	length(H,H_length),
+	X_length<H_length,
+	pivoting_a(H,T,L,G).
+%%

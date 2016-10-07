@@ -114,7 +114,7 @@ solve_puzzle(Puzzle_Blank, WordList, Puzzle_Filled):-
 	hor_slots_puzzle(Puzzle_Blank,H_Slots,H_Puzzle_Filled_Variable),
 	transpose(H_Puzzle_Filled_Variable, V_Puzzle),
     ver_slots_puzzle(V_Puzzle,H_Slots,H_V_Slots),
-	transpose(V_Puzzle,Puzzle_Fixed),!,
+	transpose(V_Puzzle,Puzzle_Fixed),
 	match_words(WordList_Optimized,H_V_Slots),
 	Puzzle_Filled = Puzzle_Fixed,!.
 
@@ -252,6 +252,7 @@ m_r([Char|Chars],Acc,Row_Marked):-
 
 %Eg. [_G15092255, _G15092258, #, #, _G15092285, _G15092300] -> [[_G15092255, _G15092258],[_G15092285, _G15092300]]
 form_slots(Marked_Row,Slots):- f_s(Marked_Row,[],[],Slots).
+
 f_s([],[],Acc,Acc):-!. % when meet this rule, cut it, in case of run to the next clause
 
 f_s([],Slot_temp,Acc,Slots):- % deal with the case that no # at the end of row
@@ -305,14 +306,12 @@ match_one_word_to_slot(Word,[Slot|Slots],Result):-
 	m_w_t_s(Word,[Slot|Slots],[],Result).
 m_w_t_s(_,[],Acc,Acc).
 m_w_t_s(Word,[Slot|Slots],Acc,Result):-
-	(Word = Slot,
-	append(Acc,[Slot],Acc1),
-	append(Acc1,Slots,Acc2),
-	m_w_t_s(_,[],Acc2,Result))
+	Word = Slot,
+	append(Acc,[Slot|Slots],Acc_New),
+	Result=Acc_New
 	;
-	(append(Acc,[Slot],Acc_New),
-	m_w_t_s(Word,Slots,Acc_New,Result)),
-	not(length(Slots,0)).
+	append(Acc,[Slot],Acc_New),
+	m_w_t_s(Word,Slots,Acc_New,Result).
 
 
 %------------------------------------------------------------------%

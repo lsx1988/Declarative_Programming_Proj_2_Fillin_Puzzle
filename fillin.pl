@@ -109,7 +109,6 @@ samelength([_|L1], [_|L2]) :-
 %----------------------------------------------------%
 
 % Start sloving the puzzle
-solve_puzzle(Solution, [], Solution):- !.
 solve_puzzle(Puzzle_Blank, WordList, Puzzle_Filled):-
 	optimize_wordlist(WordList,WordList_Optimized),
 	hor_slots_puzzle(Puzzle_Blank,H_Slots,H_Puzzle_Filled_Variable),
@@ -117,7 +116,7 @@ solve_puzzle(Puzzle_Blank, WordList, Puzzle_Filled):-
     ver_slots_puzzle(V_Puzzle,H_Slots,H_V_Slots),
 	transpose(V_Puzzle,Puzzle_Fixed),!,
 	match_words(WordList_Optimized,H_V_Slots),
-	solve_puzzle(Puzzle_Fixed, [], Puzzle_Filled),!.
+	Puzzle_Filled = Puzzle_Fixed,!.
 
 %------------------------------------------------------------------%
 %--------------- Rules used for optimize the list -----------------%

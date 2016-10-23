@@ -110,27 +110,41 @@ samelength([_|L1], [_|L2]) :-
 
 % Start sloving the puzzle
 solve_puzzle(Puzzle_Blank, WordList, Puzzle_Filled):-
-	optimize_wordlist(WordList,WordList_Optimized),
+	% sort the original wordlist, the longest word with lowest frequency will be ranked first
+	sort_wordlist(WordList,WordList_Sorted),
+	
+	% Fill the horizational blank puzzle with variable
+	% get the horizational slots list and puzzled filled with variable
 	hor_slots_puzzle(Puzzle_Blank,H_Slots,H_Puzzle_Filled_Variable),
+	
+	% transpose the puzzle to vertical
 	transpose(H_Puzzle_Filled_Variable, V_Puzzle),
+	
+	% get slots from the vertical puzzle
+	% add the new slots list into H_Slots created in horizational puzzle
     ver_slots_puzzle(V_Puzzle,H_Slots,H_V_Slots),
+	
+	% transpose the puzzle to horizational
 	transpose(V_Puzzle,Puzzle_Fixed),
-	match_words(WordList_Optimized,H_V_Slots),
+	
+	% match each word to the slot
+	match_words(WordList_Sorted,H_V_Slots),
+	
 	Puzzle_Filled = Puzzle_Fixed,!.
 
 %------------------------------------------------------------------%
 %--------------- Rules used for optimize the list -----------------%
 %------------------------------------------------------------------%
 
-optimize_wordlist(Wordlist_Original,WordList_Optimized):-
+sort_wordlist(Wordlist_Original,WordList_Optimized):-
 	
 	% sort the wordlist based on each word length, descending order
 	quick_sort_descend(Wordlist_Original, WordList_Descent_Order),
 
-	% categorise the word based on its length
+	% categorise the word based on its length, the word with same length will be grouped together in a list
 	categorise_list(WordList_Descent_Order,[],WordList_Categorise),
 
-	% sort the categorised worklist based on the length of each category length
+	% sort the categorised worklist based on the length of each category length, ascending order
 	quick_sort_ascend(WordList_Categorise,WordList_Ascend_Order),
 
 	% remove the outer nesting, change to norma format of WordList
@@ -144,21 +158,20 @@ extract_first_N_same_elements([First_Element|Tail],Acc,Result):-
 	   Acc = []
 	-> extract_first_N_same_elements(Tail,[First_Element],Result)
 	;
-	   maplist(same_length(First_Element),Acc),
+	   member(First_Element,Acc),
 	   extract_first_N_same_elements(Tail,[First_Element|Acc],Result),!.
 extract_first_N_same_elements(_,Acc,Acc):-Acc \= [].
-%%
 
 % categorise the elements of sorted list, the same elements are binded in a list
 % Acc: Accumulator used to store the sublist
-% Eg. [5,5,5,3,3,6,6,1,1,1,1] -> [[1,1,1,1],[6,6],[3,3],[5,5,5]]
+% RevAcc: the list in a reverse order of 'Acc'
+% Eg. [6,6,5,5,5,3,3,1,1,1,1] ->  [[6, 6], [5, 5, 5], [3, 3], [1, 1, 1, 1]]
 categorise_list([],Acc,RevAcc):-reverse(Acc,RevAcc).
 categorise_list(List,Acc,Result):-
 	extract_first_N_same_elements(List,[],Temp),
 	length(Temp,N),
 	remove_First_N_Elements(List,N,Rest),
 	categorise_list(Rest,[Temp|Acc],Result).
-%%
 
 % Remove first N elements from list.
 % List: The list to move element from
@@ -170,16 +183,17 @@ remove_First_N_Elements(List,0,List).
 remove_First_N_Elements([_|Tail],N,Result):-
 	Temp is N-1,
 	remove_First_N_Elements(Tail,Temp,Result).
-%%
 
 % remove the outer nesting
+% List: The original list,
+% Result: The list after remove the outer nesting of 'List'
+% Acc: Accumulator used to connect the element
 % Eg. [[[a],[b]],[[c],[d]]] -> [[a],[b],[c],[d]]
 remove_nesting(List,Result):-r_n(List,[],Result).
 r_n([],Acc,Acc):-!.
 r_n([X|Xs],Acc,Result):-
 	append(Acc,X,Acc1),
 	r_n(Xs,Acc1,Result).
-%%
 
 %------------------------------------------------------------------%
 %------------------------ Quicksort -------------------------------%
@@ -205,7 +219,6 @@ pivoting_d(H,[X|T],L,[X|G]):-
 	length(H,H_length),
 	X_length>H_length,
 	pivoting_d(H,T,L,G).
-%%
 
 % quicksort in accending order
 quick_sort_ascend(List,Sorted):-
@@ -233,16 +246,19 @@ pivoting_a(H,[X|T],L,[X|G]):-
 %----------------- Mark puzzle row with variable ------------------%
 %------------------------------------------------------------------%
 
-%Eg. ['_','_',#,#,'_','_'] -> [_G15092255, _G15092258, #, #, _G15092285, _G15092300]
+% Relace the '_' with a variable
+% Row: Original row from puzzle
+% Row_Marked: the row marked with variable
+% Eg. ['_','_',#,#,'_','_'] -> [_G15092255, _G15092258, #, #, _G15092285, _G15092300]
 mark_row(Row,Row_Marked):-m_r(Row,[],Row_Marked).
 m_r([],Acc,Acc).
 m_r([Char|Chars],Acc,Row_Marked):-
-	Char='_'-> 
+	Char='_'->   % if the element is '_', create a variable with length 1 and add it to the Accumulator
 	length(Variable,1),
 	append(Acc,Variable,Acc1),
 	m_r(Chars,Acc1,Row_Marked)
 	;
-	append(Acc,[Char],Acc1),
+	append(Acc,[Char],Acc1),  % the element is not '_', namely '#', add it to the Accumulator directly
 	m_r(Chars,Acc1,Row_Marked).
 %%
 
@@ -250,12 +266,15 @@ m_r([Char|Chars],Acc,Row_Marked):-
 %----------------- Form slots from a marked row- ------------------%
 %------------------------------------------------------------------%
 
-%Eg. [_G15092255, _G15092258, #, #, _G15092285, _G15092300] -> [[_G15092255, _G15092258],[_G15092285, _G15092300]]
+% Eg. [_G15092255, _G15092258, #, #, _G15092285, _G15092300] -> 
+%     [[_G15092255, _G15092258],[_G15092285, _G15092300]]
 form_slots(Marked_Row,Slots):- f_s(Marked_Row,[],[],Slots).
 
-f_s([],[],Acc,Acc):-!. % when meet this rule, cut it, in case of run to the next clause
+% when meet this rule, cut it, in case of run to the next clause
+f_s([],[],Acc,Acc):-!. %
 
-f_s([],Slot_temp,Acc,Slots):- % deal with the case that no # at the end of row
+% deal with the case that no # at the end of row
+f_s([],Slot_temp,Acc,Slots):- 
 	length(Slot_temp,L),
 	L>=1 ->
 		append(Acc,[Slot_temp],Acc1),
@@ -266,7 +285,7 @@ f_s([],Slot_temp,Acc,Slots):- % deal with the case that no # at the end of row
 f_s([Char|Chars],Slot_temp,Acc,Slots):-
 	Char == # ->
 		length(Slot_temp,L),
-		(L>=1->                          % deal with the case that no variable before the #
+		(L>=1->              % deal with the case that no variable before the #
 			append(Acc,[Slot_temp],Acc1),
 			f_s(Chars,[],Acc1,Slots)
 			;
@@ -280,14 +299,29 @@ f_s([Char|Chars],Slot_temp,Acc,Slots):-
 %----- Get the slots and updated horizational puzzle --------------%
 %------------------------------------------------------------------%
 
+% Using accumulator the run the operation
 hor_slots_puzzle(Puzzle,Slots,Puzzle_With_Variable):-
 	h_s_p(Puzzle,[],Slots,[],Puzzle_With_Variable).
+	
+% when go through the puzzle, return the accumulator as the result
 h_s_p([],SlotsAcc,SlotsAcc,PuzzleAcc,PuzzleAcc).
+
+
 h_s_p([Row|Rows],SlotsAcc,Slots,PuzzleAcc,Puzzle_With_Variable):-
-	mark_row(Row,Row_Marked),
+
+	% mark the current row with variable
+	mark_row(Row,Row_Marked), 
+	
+	% add the marked row into accumulator
 	append(PuzzleAcc,[Row_Marked],PuzzleAcc_New),
+	
+	% get slots form the marked row
 	form_slots(Row_Marked,Slots_From_Row),
+	
+	% add the slots into accumulator
 	append(SlotsAcc,Slots_From_Row,SlotAcc_New),
+	
+	% continue on rest data
 	h_s_p(Rows,SlotAcc_New,Slots,PuzzleAcc_New,Puzzle_With_Variable).
 
 %------------------------------------------------------------------%
@@ -302,22 +336,28 @@ ver_slots_puzzle([Row|Rows],SlotsAcc,H_V_Slots):-
 %------------------------------------------------------------------%
 %--------------------- Match one word to slot ---------------------%
 %------------------------------------------------------------------%
-match_one_word_to_slot(Word,[Slot|Slots],Result):-
-	m_w_t_s(Word,[Slot|Slots],[],Result).
-m_w_t_s(_,[],Acc,Acc).
-m_w_t_s(Word,[Slot|Slots],Acc,Result):-
-	Word = Slot,
-	append(Acc,[Slot|Slots],Acc_New),
-	Result=Acc_New
-	;
-	append(Acc,[Slot],Acc_New),
-	m_w_t_s(Word,Slots,Acc_New,Result).
+match_one_word_to_slot(Word,[Slot|Slots],Acc,Result):-
 
+	% when the word can unify a slot, return the rest slots
+	Word = Slot,
+	append(Slots,Acc,Result)
+	;
+	
+	% if word can not unify the slot, continue on rest slots
+	append(Acc,[Slot],Acc_New),	
+	match_one_word_to_slot(Word,Slots,Acc_New,Result).
 
 %------------------------------------------------------------------%
 %--------------------- Match all words to slots -------------------%
 %------------------------------------------------------------------%
-match_words([],_):-!.
 match_words([Word|Words],H_V_Slots):-
-	match_one_word_to_slot(Word,H_V_Slots,Slots_Left),
+	match_one_word_to_slot(Word,H_V_Slots,[],Slots_Left),
 	match_words(Words,Slots_Left).
+match_words([],_).
+
+
+
+
+
+
+
